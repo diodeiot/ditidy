@@ -1,13 +1,48 @@
-from typing import List
-import yaml
 import os
-
-import yaml.scanner
+from typing import List
 
 from ditidy.error import on_error
 
+import yaml
+import yaml.scanner
 
-CHECKS = ["dir-name", "file-name", "include-guard", "extern-c"]
+CHECKS = ["dir-name", "file-name", "include-guard", "extern-c", "clang-format", "shellcheck"]
+
+DEFAULT_C_HDR_EXTS = ["h"]
+DEFAULT_C_SRC_EXTS = ["c"]
+
+DEFAULT_CPP_HDR_EXTS = ["h", "hh"]
+DEFAULT_CPP_SRC_EXTS = ["cpp", "cc"]
+
+DEFAULT_SH_EXTS = ["sh"]
+
+
+def load_options(config):
+    options = {}
+
+    if "options" not in config:
+        config["options"] = {}
+
+    content = config.get("options")
+    if not isinstance(content, dict):
+        on_error("options: should be dictionary")
+
+    options["includes"] = load_single_or_array_str("includes", content, ["**/*"])
+    options["excludes"] = load_single_or_array_str("excludes", content, [])
+
+    options["c_hdr_exts"] = load_single_or_array_str("c_hdr_exts", content, DEFAULT_C_HDR_EXTS)
+    options["c_src_exts"] = load_single_or_array_str("c_src_exts", content, DEFAULT_C_SRC_EXTS)
+
+    options["cpp_hdr_exts"] = load_single_or_array_str("cpp_hdr_exts", content, DEFAULT_CPP_HDR_EXTS)
+    options["cpp_src_exts"] = load_single_or_array_str("cpp_src_exts", content, DEFAULT_CPP_SRC_EXTS)
+
+    options["sh_exts"] = load_single_or_array_str("sh_exts", content, DEFAULT_SH_EXTS)
+
+    for key in content:
+        on_error(f"{key}: unknown key in the options")
+
+    del config["options"]
+    return options
 
 
 def update_check_list(check_list: List[str], new_list: List[str], add: bool):
@@ -38,69 +73,90 @@ def load_check_list(checks: any):
     return check_list
 
 
-def load_glob_patterns(data: any):
-    patterns = []
-    if not isinstance(data, list):
-        on_error("glob patterns should be a list")
-    for pattern in data:
-        if not isinstance(pattern, str):
-            on_error("glob pattern should be a string")
-        patterns.append(pattern)
-    return patterns
+def load_single_or_array_str(key: str, data: any, default: List[str]):
+    """
+    `key`'i `data` içinde kontrol eder. String veya string listesi olmalıdır.
+
+    `key`'in değeri boş olamaz.
+
+    Eğer `key` yoksa, `default` değer atanır.
+
+    `default` boş olabilir.
+    """
+    if key in data:
+        content = data.get(key)
+        if isinstance(content, str):
+            content = [content]
+        elif isinstance(content, list) and len(content) > 0:
+            for i in content:
+                if not isinstance(i, str):
+                    on_error(f"{key}: should be string or array of string")
+        else:
+            on_error(f"{key}: should be string or array of string")
+        del data[key]
+        return content
+    return default
 
 
-def load_check_option(check_option_key: any, check_option: any):
-    if check_option_key not in CHECKS:
-        on_error(f"unknown check option key= {check_option_key}")
-    elif not isinstance(check_option, dict):
-        on_error(f"invalid check option= {check_option_key}")
+def load_check_option(key: any, content: any, options: dict):
+    if key not in CHECKS:
+        on_error(f"unknown check option key= {key}")
+    elif not isinstance(content, dict):
+        on_error(f"{key}: should be dictionary")
 
-    includes = load_glob_patterns(check_option.get("includes"))
-    del check_option["includes"]
+    check_options = {}
+    check_options["includes"] = load_single_or_array_str("includes", content, options["includes"])
+    check_options["excludes"] = options["excludes"] + load_single_or_array_str("excludes", content, [])
 
-    excludes = []
-    if check_option.get("excludes"):
-        excludes = load_glob_patterns(check_option.get("excludes"))
-        del check_option["excludes"]
+    for sub_key in content:
+        on_error(f"unknown key in the check option {key}= {sub_key}")
 
-    for key in check_option:
-        on_error(f"unknown key in the check option {check_option_key}= {key}")
-
-    return {"includes": includes, "excludes": excludes}
+    return check_options
 
 
-def load_check_options(check_options: any):
-    options = {}
-    if not isinstance(check_options, dict):
-        on_error("check-options is invalid")
-    for check_option_key in check_options.keys():
-        option = load_check_option(check_option_key, check_options.get(check_option_key))
-        options[check_option_key] = option
-    return options
+def load_check_options(data: any, options: dict):
+    if "check-options" not in data:
+        data["check-options"] = {}
+
+    content = data["check-options"]
+
+    if not isinstance(content, dict):
+        on_error("check-options: should be dictionary")
+
+    check_options = {}
+    for key in content.keys():
+        option = load_check_option(key, content.get(key), options)
+        check_options[key] = option
+    del data["check-options"]
+
+    # belirtilmeyen check optionların default değerlerini yükle
+    missing_check_options = list(set(CHECKS)-set(check_options.keys()))
+    for i in missing_check_options:
+        option = load_check_option(i, {}, options)
+        check_options[i] = option
+
+    return check_options
 
 
 def load(data: any):
     if not isinstance(data, dict):
-        on_error("invalid config file")
+        on_error("invalid config format")
+
+    options = load_options(data)
 
     check_list = load_check_list(data.get("checks"))
     del data["checks"]
 
-    checks = load_check_options(data.get("check-options"))
-    del data["check-options"]
+    checks = load_check_options(data, options)
 
-    if len(data.keys()) > 0:
-        on_error(f"unknown key(s)= {', '.join(data.keys())}")
-
-    missing_options = list(set(check_list)-set(checks.keys()))
-    if len(missing_options) > 0:
-        on_error(f"missing check option(s)= {', '.join(missing_options)}")
+    for key in data:
+        on_error(f"{key}: unknown key in the config file")
 
     missing_checks = list(set(checks.keys())-set(check_list))
     if len(missing_checks) > 0:
         on_error(f"missing check(s)= {', '.join(missing_checks)}")
 
-    return checks
+    return {"options": options, "checks": checks}
 
 
 def parse(file: str):
@@ -111,5 +167,5 @@ def parse(file: str):
         try:
             data = yaml.safe_load(config_file)
         except yaml.scanner.ScannerError:
-            on_error("invalid config file")
+            on_error("invalid document format")
         return load(data)

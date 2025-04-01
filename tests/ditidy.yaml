@@ -1,18 +1,10 @@
 checks:
   - "*"
 check-options:
-  dir-name:
-    includes:
-      - include/**
-      - src/**
   file-name:
-    includes:
-      - include/**
-      - src/**
-  include-guard:
-    includes:
-      - include/**/*.h
-      - src/**/*.h
+    excludes:
+      - .clang-format
+      - CMakeLists.txt
+      - __init__.py
   extern-c:
-    includes:
-      - include/**/*.h
+    includes: include/**/*
