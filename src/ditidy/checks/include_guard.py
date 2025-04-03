@@ -1,8 +1,6 @@
 import os
 import re
 
-from ditidy.error import on_error
-
 
 def guard_from_file(file: str):
     basename = os.path.basename(file)
@@ -21,9 +19,6 @@ def includes_guard(file: str, code: str):
 
 
 def check(root_dir: str, files: list):
-    if len(files) == 0:
-        on_error("include-guard: no file(s) specified")
-
     fails = []
     for f in files:
         with open(os.path.join(root_dir, f), "r") as codef:

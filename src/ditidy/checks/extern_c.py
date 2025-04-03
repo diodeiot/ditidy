@@ -1,8 +1,6 @@
 import os
 import re
 
-from ditidy.error import on_error
-
 
 def includes_extern(file: str, code: str):
     match = re.match(r'.*#\s*ifdef\s+__cplusplus\s+extern\s+"C"\s*{\s*#\s*endif', code, re.DOTALL)
@@ -12,9 +10,6 @@ def includes_extern(file: str, code: str):
 
 
 def check(root_dir: str, files: list):
-    if len(files) == 0:
-        on_error("extern-c: no file(s) specified")
-
     fails = []
     for f in files:
         with open(os.path.join(root_dir, f)) as codef:

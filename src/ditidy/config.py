@@ -126,6 +126,7 @@ def load_check_options(data: any, options: dict):
     check_options = {}
     for key in content.keys():
         option = load_check_option(key, content.get(key), options)
+        option["exist"] = True
         check_options[key] = option
     del data["check-options"]
 
@@ -133,6 +134,7 @@ def load_check_options(data: any, options: dict):
     missing_check_options = list(set(CHECKS)-set(check_options.keys()))
     for i in missing_check_options:
         option = load_check_option(i, {}, options)
+        option["exist"] = False
         check_options[i] = option
 
     return check_options
@@ -147,16 +149,18 @@ def load(data: any):
     check_list = load_check_list(data.get("checks"))
     del data["checks"]
 
-    checks = load_check_options(data, options)
+    all_checks = load_check_options(data, options)
 
     for key in data:
         on_error(f"{key}: unknown key in the config file")
 
-    missing_checks = list(set(checks.keys())-set(check_list))
+    exclusive_checks = {k: v for k, v in all_checks.items() if v["exist"]}
+    missing_checks = list(set(exclusive_checks.keys())-set(check_list))
     if len(missing_checks) > 0:
         on_error(f"missing check(s)= {', '.join(missing_checks)}")
 
-    return {"options": options, "checks": checks}
+    enabled_checks = {k: v for k, v in all_checks.items() if k in check_list}
+    return {"options": options, "checks": enabled_checks}
 
 
 def parse(file: str):

@@ -1,7 +1,6 @@
 import os
 import re
 
-from ditidy.error import on_error
 
 from . import git_utils
 from .dir_name import DIR_NAME_PATTERN
@@ -19,9 +18,6 @@ def __get_excluded_files(root_dir: str):
 
 def check(root_dir: str, files: list):
     files = [i for i in files if os.path.basename(i) not in __get_excluded_files(root_dir)]
-    if len(files) == 0:
-        on_error("file-name: no file(s) specified")
-
     fails = []
     for f in files:
         dir = os.path.splitext(os.path.basename(f))[0]

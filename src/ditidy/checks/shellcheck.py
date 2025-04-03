@@ -3,7 +3,6 @@ import subprocess
 import sys
 
 from ditidy import util
-from ditidy.error import on_error
 
 
 def __formatted_worker(root_dir: str, file: str):
@@ -15,7 +14,7 @@ def __formatted_worker(root_dir: str, file: str):
 
 def check(root_dir: str, files: list):
     if len(files) == 0:
-        on_error("shellcheck: no file(s) specified")
+        return None
 
     pool_args = [(root_dir, i) for i in files]
     results = util.pool_wrapper(__formatted_worker, pool_args)
