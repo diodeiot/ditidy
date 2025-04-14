@@ -12,7 +12,7 @@ DEFAULT_C_HDR_EXTS = ["h"]
 DEFAULT_C_SRC_EXTS = ["c"]
 
 DEFAULT_CPP_HDR_EXTS = ["h", "hh"]
-DEFAULT_CPP_SRC_EXTS = ["cpp", "cc"]
+DEFAULT_CPP_SRC_EXTS = ["cpp", "cc", "ino"]
 
 DEFAULT_SH_EXTS = ["sh"]
 
