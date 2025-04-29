@@ -2,20 +2,54 @@ import multiprocessing
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import List
 
 from ditidy import util
 from ditidy.error import on_error
 
 
+def is_in_git_dir(root_dir: str):
+    """
+    bulunduğu dizinin bir git reposu olup olmadığını kontrol eder
+    """
+    result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=root_dir, capture_output=True, text=True)
+    if result.returncode == 128:
+        return False
+    elif result.returncode == 0:
+        return True
+    else:
+        sys.stderr.write(result.stderr)
+        on_error("failed")
+
+
+def __get_git_repo_root(root_dir: str):
+    """
+    git reposunun bulunduğu dizinin mutlak pathini döner
+    """
+    result = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=root_dir, capture_output=True, text=True)
+    if result.returncode == 0:
+        return os.path.dirname(result.stdout)
+    else:
+        sys.stderr.write(result.stderr)
+        on_error("failed")
+
+
 def __get_submodule_dirs(root_dir: str):
     """
     gitteki submodule'lerin dizinlerini root_dir`'e göre listeler, normalize eder ve sıralar
     """
-    output = subprocess.check_output("git config --file .gitmodules --get-regexp path | awk '{print $2}'", cwd=root_dir, shell=True, text=True)
+    repo_root = __get_git_repo_root(root_dir)
+    output = subprocess.check_output(f"git config --file {repo_root}/.gitmodules --get-regexp path | awk '{{print $2}}'", cwd=root_dir, shell=True, text=True)
     if len(output) == 0:
         return []
     dirs = output.splitlines()
+
+    # sadece bulunan dizindeki modülleri kullan
+    dirs = [i for i in dirs if Path(os.path.join(repo_root, i)).is_relative_to(Path(root_dir))]
+    # modülleri bulunan dizine göre temsil et
+    dirs = [Path(os.path.join(repo_root, i)).relative_to(Path(root_dir)) for i in dirs]
+
     dirs = [os.path.normpath(i) for i in dirs]
     dirs.sort()
     return dirs
@@ -49,20 +83,6 @@ def __get_ignored_dirs(root_dir: str, excludes: List[str]):
     ig_dirs = [os.path.normpath(i) for i in ig_dirs]
     ig_dirs.sort()
     return ig_dirs
-
-
-def is_in_git_dir(root_dir: str):
-    """
-    bulunduğu dizinin bir git reposunun kök dizini olup olmadığını kontrol eder
-    """
-    result = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=root_dir, capture_output=True, text=True)
-    if result.returncode == 128:
-        return False
-    elif result.returncode == 0:
-        return True
-    else:
-        sys.stderr.write(result.stderr)
-        on_error("failed")
 
 
 def get_exclude_dirs(root_dir: str):
